@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>SMART FACE — Real-Time Face Capture</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%237c6af7'/%3E%3C/svg%3E">
+		<style>
+			*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+			:root {
+				--accent:   #7c6af7;
+				--accent2:  #4fc3f7;
+				--bg-dark:  #0d0d14;
+				--bg-panel: rgba(13,13,22,.82);
+				--border:   rgba(124,106,247,.25);
+				--text:     #e8e8f0;
+				--text-dim: #7a7a9a;
+				--green:    #4cef9a;
+				--red:      #ef4c6a;
+			}
+
+			html, body {
+				width: 100%; height: 100%;
+				overflow: hidden;
+				font-family: 'Segoe UI', system-ui, sans-serif;
+				background: var(--bg-dark);
+				color: var(--text);
+			}
+
+			/* ── Canvas fills the screen ── */
+			canvas { display: block; position: fixed; inset: 0; z-index: 0; }
+
+			/* ── Loading screen ── */
+			#loading-screen {
+				position: fixed; inset: 0; z-index: 100;
+				background: var(--bg-dark);
+				display: flex; flex-direction: column;
+				align-items: center; justify-content: center;
+				gap: 20px;
+				transition: opacity .6s ease;
+			}
+			#loading-screen.hidden { opacity: 0; pointer-events: none; }
+
+			.spinner {
+				width: 56px; height: 56px;
+				border: 3px solid rgba(124,106,247,.2);
+				border-top-color: var(--accent);
+				border-radius: 50%;
+				animation: spin .9s linear infinite;
+			}
+			@keyframes spin { to { transform: rotate(360deg); } }
+
+			.loading-title {
+				font-size: 1.5rem; font-weight: 700; letter-spacing: .12em;
+				background: linear-gradient(90deg, var(--accent), var(--accent2));
+				-webkit-background-clip: text;
+				background-clip: text;
+				-webkit-text-fill-color: transparent;
+			}
+			.loading-sub { font-size: .8rem; color: var(--text-dim); letter-spacing: .08em; }
+
+			/* ── Header bar ── */
+			#header {
+				position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+				height: 52px;
+				background: var(--bg-panel);
+				backdrop-filter: blur(18px);
+				border-bottom: 1px solid var(--border);
+				display: flex; align-items: center; padding: 0 18px; gap: 14px;
+			}
+
+			.logo-dot {
+				width: 10px; height: 10px; border-radius: 50%;
+				background: linear-gradient(135deg, var(--accent), var(--accent2));
+				box-shadow: 0 0 8px var(--accent);
+				flex-shrink: 0;
+			}
+
+			#header h1 {
+				font-size: .9rem; font-weight: 700; letter-spacing: .14em;
+				text-transform: uppercase;
+				background: linear-gradient(90deg, var(--accent), var(--accent2));
+				-webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+			}
+
+			.header-sep { flex: 1; }
+
+			/* ── Status pill ── */
+			.status-pill {
+				display: flex; align-items: center; gap: 7px;
+				padding: 5px 12px; border-radius: 20px;
+				font-size: .72rem; font-weight: 600; letter-spacing: .06em;
+				text-transform: uppercase;
+				border: 1px solid var(--border);
+				background: rgba(0,0,0,.35);
+				transition: all .3s;
+			}
+			.status-dot {
+				width: 7px; height: 7px; border-radius: 50%;
+				background: var(--red);
+				box-shadow: 0 0 6px var(--red);
+				transition: all .3s;
+			}
+			.status-pill.active .status-dot {
+				background: var(--green);
+				box-shadow: 0 0 8px var(--green);
+			}
+			.status-pill.active { border-color: rgba(76,239,154,.3); }
+
+			/* ── Icon buttons ── */
+			.icon-btn {
+				width: 32px; height: 32px; border-radius: 8px;
+				border: 1px solid var(--border);
+				background: rgba(255,255,255,.05);
+				color: var(--text-dim);
+				cursor: pointer; display: flex; align-items: center; justify-content: center;
+				font-size: .85rem; transition: all .2s; user-select: none;
+			}
+			.icon-btn:hover { background: rgba(124,106,247,.18); color: var(--text); border-color: var(--accent); }
+
+
+
+			/* ── Bottom bar ── */
+			/* download button */
+			.dl-btn {
+				display: flex; align-items: center; gap: 6px;
+				padding: 5px 12px; border-radius: 8px;
+				border: 1px solid var(--border);
+				background: rgba(124,106,247,.12);
+				color: var(--text); font-size: .72rem; font-weight: 600;
+				letter-spacing: .05em; cursor: pointer; white-space: nowrap;
+				transition: all .2s; user-select: none;
+			}
+			.dl-btn:hover { background: rgba(124,106,247,.28); border-color: var(--accent); }
+
+			/* Side-panel menu items */
+			.side-list button.menu-item {
+				display: block; width: 100%; text-align: left;
+				padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+				background: rgba(0,0,0,.06); color: var(--text); margin-bottom: 8px; cursor: pointer;
+			}
+			.side-list button.menu-item:hover { background: rgba(124,106,247,.12); border-color: var(--accent); color: var(--text); }
+
+			/* accessory list items */
+			.accessory-item { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+			.accessory-item .name { flex:1; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+			.accessory-item .act-btn { padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:rgba(0,0,0,.06); color:var(--text); cursor:pointer; }
+			.accessory-item .act-btn:hover { background: rgba(124,106,247,.12); border-color:var(--accent); }
+
+			/* ── Blendshape panel (side drawer) ── */
+			#side-panel {
+				position: fixed; top: 52px; left: 0; bottom: 0; z-index: 15;
+				width: 260px;
+				background: var(--bg-panel);
+				backdrop-filter: blur(18px);
+				border-right: 1px solid var(--border);
+				overflow-y: auto;
+				transform: translateX(-100%);
+				transition: transform .3s ease;
+				padding: 14px 12px;
+			}
+			#side-panel.open { transform: translateX(0); }
+			#side-panel::-webkit-scrollbar { width: 4px; }
+			#side-panel::-webkit-scrollbar-track { background: transparent; }
+			#side-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+			.panel-section-title {
+				font-size: .65rem; letter-spacing: .14em; text-transform: uppercase;
+				color: var(--accent); margin-bottom: 10px; padding-bottom: 6px;
+				border-bottom: 1px solid var(--border);
+			}
+
+			/* hide the Live Blendshapes UI per user request (keeps DOM for logic) */
+			#bs-panel { display: none; }
+
+			.bs-row {
+				display: flex; align-items: center; gap: 8px;
+				margin-bottom: 6px; font-size: .72rem; color: var(--text-dim);
+			}
+			.bs-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+			.bs-bar-bg {
+				width: 80px; height: 5px; border-radius: 3px;
+				background: rgba(255,255,255,.07); flex-shrink: 0; overflow: hidden;
+			}
+			.bs-bar-fill {
+				height: 100%; border-radius: 3px;
+				background: linear-gradient(90deg, var(--accent), var(--accent2));
+				width: 0%; transition: width .08s;
+			}
+
+			/* lil-gui repositioned + Controls title hidden */
+			.lil-gui.root {
+				position: fixed !important;
+				top: 60px !important;
+				right: 12px !important;
+				z-index: 25 !important;
+				max-height: calc(100vh - 80px) !important;
+				overflow-y: auto !important;
+			}
+			.lil-gui.root > .title { display: none !important; }
+
+			/* ── Face-detected overlay badge ── */
+			#face-badge {
+				position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+				z-index: 20;
+				padding: 5px 16px; border-radius: 20px;
+				font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+				background: rgba(76,239,154,.12);
+				border: 1px solid rgba(76,239,154,.4);
+				color: var(--green);
+				opacity: 0; transition: opacity .4s;
+				pointer-events: none;
+			}
+			#face-badge.visible { opacity: 1; }
+
+
+		</style>
+	</head>
+	<body>
+
+		<!-- Loading screen -->
+		<div id="loading-screen">
+			<div class="spinner"></div>
+			<div class="loading-title">SMART FACE</div>
+			<div class="loading-sub">Loading 3D model &amp; AI engine…</div>
+		</div>
+
+		<!-- Header -->
+		<div id="header">
+			<div class="logo-dot"></div>
+			<h1>Smart Face</h1>
+			<div class="header-sep"></div>
+			<!-- Compact menu buttons: open side-panel for Heads / Prompts (props) -->
+			<div id="model-picker" style="display:flex;align-items:center;gap:8px">
+				<button id="btn-heads" class="dl-btn" title="Open Heads menu">Heads</button>
+				<button id="btn-prompts" class="dl-btn" title="Open Prompts menu">Prompts</button>
+			</div>
+			<div class="status-pill" id="status-pill">
+				<div class="status-dot"></div>
+				<span id="status-text">Camera Off</span>
+			</div>
+
+		</div>
+
+		<!-- Face detected badge -->
+		<div id="face-badge">&#10004; Face Detected</div>
+
+		<!-- Side blendshape / menus panel -->
+		<div id="side-panel">
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+	<script type="importmap">
+	{
+	  "imports": {
+	    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+	    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+	  }
+	}
+	</script>
+
+	<script type="module" defer>
+	// Lazy load all heavy modules for mobile performance
+	window.addEventListener('DOMContentLoaded', async () => {
+	  // Only load Three.js and MediaPipe after DOM is ready
+	  const [THREE, { OrbitControls }, { GLTFLoader }, { GLTFExporter }, { KTX2Loader }, { MeshoptDecoder }, { GUI }, vision, { initHeadsSystem }, { initPromptsSystem }, { initBlendshapeSystem, updateBlendshapes }, { initEmotionSystem, updateEmotions }] = await Promise.all([
+	    import('three'),
+	    import('three/addons/controls/OrbitControls.js'),
+	    import('three/addons/loaders/GLTFLoader.js'),
+	    import('three/addons/exporters/GLTFExporter.js'),
+	    import('three/addons/loaders/KTX2Loader.js'),
+	    import('three/addons/libs/meshopt_decoder.module.js'),
+	    import('three/addons/libs/lil-gui.module.min.js'),
+	    import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0'),
+	    import('./systems/heads-system.js'),
+	    import('./systems/prompts-system.js'),
+	    import('./systems/blendshapes.js'),
+	    import('./systems/emotions.js')
+	  ]);
+
+	  // ...existing code...
+	  // (Paste the entire original <script type="module"> code here, but replace all top-level imports with the above destructured imports)
+	  // ...existing code...
+	});
+	</script>
+			</div>
+			<div id="bs-panel">
+				<div class="panel-section-title" style="margin-top:12px">Live Blendshapes</div>
+				<div id="bs-list"></div>
+			</div>
+		</div>
+
+
+
+
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+			import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+			import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+			import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+			// ── UI helpers ──────────────────────────────────────────────────
+			const loadingScreen = document.getElementById( 'loading-screen' );
+			const statusPill    = document.getElementById( 'status-pill' );
+			const statusText    = document.getElementById( 'status-text' );
+			const faceBadge     = document.getElementById( 'face-badge' );
+			const sidePanel     = document.getElementById( 'side-panel' );
+			const bsList        = document.getElementById( 'bs-list' );
+			const smileBadge    = document.getElementById( 'smile-badge' );
+			const mouthBadge    = document.getElementById( 'mouth-badge' );
+			const angryBadge    = document.getElementById( 'angry-badge' );
+			const surprisedBadge= document.getElementById( 'surprised-badge' );
+			const neutralBadge  = document.getElementById( 'neutral-badge' );
+
+			// Model selector elements (populated from models.json)
+			const modelSelect = document.getElementById( 'model-select' );
+			const btnLoadModel = document.getElementById( 'btn-load-model' );
+			const propsSelect = document.getElementById( 'props-select' );
+			const btnAddProp = document.getElementById( 'btn-add-prop' );
+
+			// hook for dynamic mask loading (set later inside facecap load callback)
+			let loadMaskModel = null;
+			// hook for dynamic prop loading (mirrors mask loader but doesn't remove the head)
+
+
+			// Model loading and legacy select wiring handled inside systems/*.js
+
+			// Wire up Prop load button (props always attach and do not remove the head)
+
+
+			// Header button toggles
+			const btnSide = document.getElementById( 'btn-side' );
+			if ( btnSide ) {
+				btnSide.addEventListener( 'click', () => sidePanel.classList.toggle( 'open' ) );
+			}
+
+			// New header menu buttons: Heads / Prompts (populated by small systems)
+			const btnHeads = document.getElementById( 'btn-heads' );
+			const btnPrompts = document.getElementById( 'btn-prompts' );
+			const sideContent = document.getElementById( 'side-content' );
+			const sideTitle = document.getElementById( 'side-title' );
+			const sideClose = document.getElementById( 'side-close' );
+
+			import { initHeadsSystem } from './systems/heads-system.js';
+			import { initPromptsSystem } from './systems/prompts-system.js';
+
+			// Initialize lightweight systems and give them accessors so they can
+			// call the runtime `loadMaskModel` when it becomes available.
+			initHeadsSystem( { getLoadMaskModel: () => loadMaskModel, sidePanel } );
+			initPromptsSystem( { getLoadMaskModel: () => loadMaskModel, sidePanel } );
+
+			// Accessory list UI: shows attached props and provides hide/remove actions
+			const accessoryListEl = document.getElementById( 'accessory-list' );
+
+			function refreshAccessoryList() {
+				if ( !accessoryListEl ) return;
+				accessoryListEl.innerHTML = '';
+				if ( accessoryScenes.length === 0 ) {
+					const p = document.createElement( 'div' );
+					p.style.color = 'var(--text-dim)';
+					p.style.padding = '6px 4px';
+					p.textContent = 'No accessories attached.';
+					accessoryListEl.appendChild( p );
+					return;
+				}
+
+				for ( let i = 0; i < accessoryScenes.length; i ++ ) {
+					const a = accessoryScenes[ i ];
+					if ( !a ) continue;
+					const row = document.createElement( 'div' );
+					row.className = 'accessory-item';
+					const name = document.createElement( 'div' );
+					name.className = 'name';
+					name.textContent = a.name || ('accessory-' + i);
+
+					const toggle = document.createElement( 'button' );
+					toggle.className = 'act-btn';
+					toggle.textContent = a.visible ? 'Hide' : 'Show';
+					toggle.addEventListener( 'click', () => {
+						a.visible = !a.visible;
+						toggle.textContent = a.visible ? 'Hide' : 'Show';
+					} );
+
+					const remove = document.createElement( 'button' );
+					remove.className = 'act-btn';
+					remove.textContent = 'Remove';
+					remove.addEventListener( 'click', () => {
+						try {
+							if ( a.parent ) a.parent.remove( a );
+						} catch ( e ) { console.warn( 'Error removing accessory', e ); }
+						accessoryScenes.splice( i, 1 );
+						refreshAccessoryList();
+					} );
+
+					row.appendChild( name );
+					row.appendChild( toggle );
+					row.appendChild( remove );
+					accessoryListEl.appendChild( row );
+				}
+			}
+
+			// initial refresh in case accessories were added before UI ready
+			setTimeout( refreshAccessoryList, 300 );
+
+			// Camera visibility now only controls the Three.js video mesh (corner preview removed)
+
+			let guiVisible = true;
+			// `btn-gui` removed from DOM; if present, keep toggle behavior safe
+			const btnGui = document.getElementById( 'btn-gui' );
+			if ( btnGui ) {
+				btnGui.addEventListener( 'click', () => {
+					guiVisible = !guiVisible;
+					if ( !gui ) {
+						gui = new GUI();
+						if ( !gui.domElement.parentElement ) document.body.appendChild( gui.domElement );
+						gui.close();
+					}
+					if ( guiVisible ) {
+						if ( !gui.domElement.parentElement ) document.body.appendChild( gui.domElement );
+						gui.domElement.style.display = '';
+						gui.domElement.style.zIndex = 9999;
+						try { gui.open(); } catch ( e ) { }
+					} else {
+						gui.domElement.style.display = 'none';
+					}
+				} );
+			}
+
+			// Download the GLB model (re-exported clean, no meshopt — fully Blender-compatible)
+			let loadedScene = null;
+			// Animation mixer and controls
+			let mixer = null;
+			let animActions = [];
+			let animDirection = 1; // 1 = forward, -1 = reverse
+			let animPlaying = false;
+			const clock = new THREE.Clock();
+
+			// Blendshape system moved to external module (blendshapes.js)
+
+			let gui; // declared here so btn-gui toggle can reach it
+
+			// Mediapipe
+
+			import vision from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0';
+
+			const { FaceLandmarker, FilesetResolver } = vision;
+
+			// blendshapesMap moved to `blendshapes.js` to avoid duplication
+
+
+
+			//
+
+			import { initBlendshapeSystem, updateBlendshapes } from './systems/blendshapes.js';
+			import { initEmotionSystem, updateEmotions } from './systems/emotions.js';
+
+			const renderer = new THREE.WebGLRenderer( { antialias: true } );
+			renderer.setPixelRatio( window.devicePixelRatio );
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			document.body.appendChild( renderer.domElement );
+
+			const camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 100 );
+			camera.position.z = 5;
+
+			const scene = new THREE.Scene();
+			scene.background = new THREE.Color( 0x0d0d14 );
+			scene.scale.x = - 1;
+
+			// Flexible lighting setup (replaces a single ambient light)
+			const pmremGenerator = new THREE.PMREMGenerator( renderer );
+
+			const ambientLight = new THREE.AmbientLight( 0xffffff, 0.6 );
+			const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.35 );
+			const dirLight = new THREE.DirectionalLight( 0xffffff, 1.0 );
+			dirLight.position.set( 5, 10, 7 );
+			const rimLight = new THREE.PointLight( 0xffffff, 0.5, 12 );
+			rimLight.position.set( -4, 2, 6 );
+
+			scene.add( ambientLight );
+			scene.add( hemiLight );
+			scene.add( dirLight );
+			scene.add( rimLight );
+
+			// Environment map placeholder (load a small cube map and prepare a PMREM-based env)
+			let envMap = null;
+			const cubeLoader = new THREE.CubeTextureLoader();
+			const envUrls = [
+				'https://threejs.org/examples/textures/cube/Bridge2/posx.jpg',
+				'https://threejs.org/examples/textures/cube/Bridge2/negx.jpg',
+				'https://threejs.org/examples/textures/cube/Bridge2/posy.jpg',
+				'https://threejs.org/examples/textures/cube/Bridge2/negy.jpg',
+				'https://threejs.org/examples/textures/cube/Bridge2/posz.jpg',
+				'https://threejs.org/examples/textures/cube/Bridge2/negz.jpg'
+			];
+			cubeLoader.load( envUrls, ( cubeTex ) => {
+				envMap = pmremGenerator.fromCubemap( cubeTex ).texture;
+				envMap.encoding = THREE.sRGBEncoding;
+				// start with env enabled by default
+				scene.environment = envMap;
+			} );
+
+			const controls = new OrbitControls( camera, renderer.domElement );
+
+			// Face
+
+			let face, eyeL, eyeR;
+			let maskSceneGlobal = null; // reference to the loaded mask scene for runtime tweaks
+			const accessoryScenes = []; // optional accessories attached on top of the main mask
+			const eyeRotationLimit = THREE.MathUtils.degToRad( 30 );
+
+			const ktx2Loader = new KTX2Loader()
+				.setTranscoderPath( 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/' )
+				.detectSupport( renderer );
+
+			const gltfLoader = new GLTFLoader()
+				.setKTX2Loader( ktx2Loader )
+				.setMeshoptDecoder( MeshoptDecoder );
+
+			// Parameters for mask tuning (declare early so GUI code can reference them)
+			const maskParams = {
+				smooth: 0.45,
+				forward: 0.06,
+				centroidMult: 0.14,
+				sizeFactorMul: 2.5,
+				scaleMin: 0.35,
+				scaleMax: 3.0,
+				localX: 0,
+				localY: -0.02,
+				localZ: 0.02
+			};
+
+			// Try to load overrides from a local JSON file so you can edit tuning in an editor.
+			// Place `mask_tuning.json` next to `index.html` with matching keys to override defaults.
+			fetch( 'mask_tuning.json' ).then( r => {
+				if ( !r.ok ) throw new Error( 'Not found' );
+				return r.json();
+			} ).then( data => {
+				Object.assign( maskParams, data );
+				try { SMOOTH_ALPHA = maskParams.smooth; } catch ( e ) { }
+				try { FORWARD_OFFSET = maskParams.forward; } catch ( e ) { }
+				if ( typeof maskSceneGlobal !== 'undefined' && maskSceneGlobal ) {
+					maskSceneGlobal.position.set( maskParams.localX, maskParams.localY, maskParams.localZ );
+				}
+				console.log( 'Mask tuning loaded from mask_tuning.json' );
+			} ).catch( ( err ) => {
+				console.debug( 'mask_tuning.json not loaded:', err );
+			} );
+
+			// Load the facecap GLTF and run the original setup inside its callback
+			gltfLoader.load( 'https://threejs.org/examples/models/gltf/facecap.glb', ( gltf ) => {
+				loadedScene = gltf.scene; // store for clean re-export
+				const mesh = gltf.scene.children[ 0 ];
+				scene.add( mesh );
+				// mark all nodes in the loaded facecap so we can hide them independently later
+				mesh.traverse( ( node ) => {
+						if ( node.isMesh ) node.userData.isFacecap = true;
+					} );
+
+					const head = mesh.getObjectByName( 'mesh_2' );
+					head.material = new THREE.MeshNormalMaterial();
+
+					const teeth = mesh.getObjectByName( 'mesh_3' );
+					teeth.material = new THREE.MeshNormalMaterial();
+
+					face = mesh.getObjectByName( 'mesh_2' );
+					eyeL = mesh.getObjectByName( 'eyeLeft' );
+  					eyeR = mesh.getObjectByName( 'eyeRight' );
+
+					// GUI
+					gui = new GUI();
+					gui.close();
+
+					// Lighting controls: exposed via the same GUI so you can tweak in real-time
+					if ( gui ) {
+						const lightFolder = gui.addFolder( 'Lighting' );
+						const lightState = {
+							preset: 'Studio',
+							ambient: ambientLight.intensity,
+							hemi: hemiLight.intensity,
+							dir: dirLight.intensity,
+							rim: rimLight.intensity,
+							env: true,
+							envIntensity: 1.0,
+							exposure: renderer.toneMappingExposure
+						};
+
+						lightFolder.add( lightState, 'preset', [ 'Studio', 'Rim', 'Dramatic', 'Flat', 'Neutral' ] ).name( 'Preset' ).onChange( applyLightingPreset );
+
+						lightFolder.add( lightState, 'ambient', 0, 5, 0.01 ).name( 'Ambient' ).onChange( v => ambientLight.intensity = v );
+						lightFolder.add( lightState, 'hemi', 0, 3, 0.01 ).name( 'Hemisphere' ).onChange( v => hemiLight.intensity = v );
+						lightFolder.add( lightState, 'dir', 0, 5, 0.01 ).name( 'Directional' ).onChange( v => dirLight.intensity = v );
+						lightFolder.add( lightState, 'rim', 0, 3, 0.01 ).name( 'Rim / Fill' ).onChange( v => rimLight.intensity = v );
+
+						lightFolder.addColor( { DirColor: '#ffffff' }, 'DirColor' ).name( 'Dir Color' ).onChange( v => dirLight.color.set( v ) );
+						lightFolder.addColor( { HemiSky: '#ffffff' }, 'HemiSky' ).name( 'Hemi Sky' ).onChange( v => hemiLight.color.set( v ) );
+						lightFolder.addColor( { HemiGround: '#444444' }, 'HemiGround' ).name( 'Hemi Ground' ).onChange( v => hemiLight.groundColor.set( v ) );
+
+						lightFolder.add( lightState, 'env' ).name( 'Use Env Map' ).onChange( v => { scene.environment = v ? envMap : null; } );
+						lightFolder.add( lightState, 'envIntensity', 0, 2, 0.01 ).name( 'Env Intensity' ).onChange( v => {
+							// surface materials that use envMapIntensity will pick this up; for others, we can attempt a best-effort
+							scene.traverse( n => { if ( n.isMesh && n.material && 'envMapIntensity' in n.material ) n.material.envMapIntensity = v; } );
+						} );
+						lightFolder.add( lightState, 'exposure', 0.1, 2, 0.01 ).name( 'Exposure' ).onChange( v => renderer.toneMappingExposure = v );
+
+						function applyLightingPreset( name ) {
+							switch ( name ) {
+								case 'Studio':
+									ambientLight.intensity = 0.5;
+									hemiLight.intensity = 0.25;
+									dirLight.intensity = 1.2;
+									rimLight.intensity = 0.4;
+									renderer.toneMappingExposure = 1.0;
+									break;
+								case 'Rim':
+									ambientLight.intensity = 0.25;
+									hemiLight.intensity = 0.15;
+									dirLight.intensity = 0.6;
+									rimLight.intensity = 1.2;
+									renderer.toneMappingExposure = 1.0;
+									break;
+								case 'Dramatic':
+									ambientLight.intensity = 0.05;
+									hemiLight.intensity = 0.05;
+									dirLight.intensity = 2.2;
+									rimLight.intensity = 0.1;
+									renderer.toneMappingExposure = 0.9;
+									break;
+								case 'Flat':
+									ambientLight.intensity = 1.2;
+									hemiLight.intensity = 0.6;
+									dirLight.intensity = 0.2;
+									rimLight.intensity = 0.2;
+									renderer.toneMappingExposure = 1.2;
+									break;
+								case 'Neutral':
+									ambientLight.intensity = 0.35;
+									hemiLight.intensity = 0.25;
+									dirLight.intensity = 0.9;
+									rimLight.intensity = 0.4;
+									renderer.toneMappingExposure = 1.0;
+									break;
+							}
+						}
+
+						lightFolder.open();
+					}
+
+					const influences = head.morphTargetInfluences;
+
+					// Do not expose live morph-target sliders in the GUI to avoid showing raw facial data.
+					// The visual side-panel remains for UI purposes.
+
+					// Add runtime GUI controls for mask tuning
+					if ( gui ) {
+						// UI state for facecap visibility (default off)
+						const uiState = { showFacecap: false };
+						function setFacecapVisible( v ) {
+							mesh.traverse( ( n ) => {
+								if ( n.isMesh && n.userData.isFacecap ) n.visible = v;
+							} );
+						}
+						// add toggle at top of GUI
+						gui.add( uiState, 'showFacecap' ).name( 'Show facecap' ).onChange( ( v ) => setFacecapVisible( v ) );
+						setFacecapVisible( false );
+						// Mask tuning is now read from `mask_tuning.json` — UI sliders removed.
+					}
+					// Initialize external blendshape / emotion systems
+					initBlendshapeSystem( head, bsList );
+					initEmotionSystem( { smileBadge, mouthBadge, angryBadge, surprisedBadge, neutralBadge, faceBadge } );
+
+					// Setup animations (if the GLTF contained animation clips)
+					if ( gltf.animations && gltf.animations.length > 0 ) {
+						mixer = new THREE.AnimationMixer( mesh );
+						animActions = gltf.animations.map( ( clip ) => {
+							const action = mixer.clipAction( clip );
+							action.clampWhenFinished = true;
+							action.setLoop( THREE.LoopOnce, 0 );
+							action.enabled = true;
+							action.setEffectiveWeight( 1 );
+							// store clip duration for reverse start time
+							action._duration = clip.duration || 0;
+							return action;
+						} );
+
+						// Animation actions prepared above; UI trigger removed.
+					}
+
+					// Make mask loading dynamic: assign a loader function to `loadMaskModel`
+					loadMaskModel = function ( path, attach = false ) {
+						// If not attaching, remove the primary mask (leave accessories intact)
+						if ( !attach ) {
+							try {
+								if ( maskSceneGlobal && maskSceneGlobal.parent ) {
+									maskSceneGlobal.parent.remove( maskSceneGlobal );
+								}
+							} catch ( e ) { console.warn( 'Error removing previous mask', e ); }
+						}
+
+						gltfLoader.load( path, ( maskGltf ) => {
+							const maskScene = maskGltf.scene;
+							maskScene.name = path.split( '/' ).pop();
+							maskScene.scale.set( 1, 1, 1 );
+
+							const faceGrp = mesh.getObjectByName( 'grp_transform' ) || mesh;
+
+							maskScene.updateMatrixWorld( true );
+							const worldPos = new THREE.Vector3();
+							const worldQuat = new THREE.Quaternion();
+							const worldScale = new THREE.Vector3();
+							maskScene.getWorldPosition( worldPos );
+							maskScene.getWorldQuaternion( worldQuat );
+							maskScene.getWorldScale( worldScale );
+
+							faceGrp.add( maskScene );
+
+							// If attaching a prop and an accessory with the same filename already exists,
+							// remove the old one before adding the new one (prevents duplicates).
+							if ( attach ) {
+								const existingIndex = accessoryScenes.findIndex( a => a && a.name === maskScene.name );
+								if ( existingIndex !== -1 ) {
+									try {
+										const old = accessoryScenes[ existingIndex ];
+										if ( old && old.parent ) old.parent.remove( old );
+									} catch ( e ) { console.warn( 'Error removing existing accessory', e ); }
+									accessoryScenes.splice( existingIndex, 1 );
+									// update accessory UI
+									if ( typeof refreshAccessoryList === 'function' ) refreshAccessoryList();
+								}
+							}
+
+							faceGrp.worldToLocal( worldPos );
+							maskScene.position.copy( worldPos );
+
+							const parentWorldQuat = new THREE.Quaternion();
+							faceGrp.getWorldQuaternion( parentWorldQuat );
+							maskScene.quaternion.copy( parentWorldQuat.clone().invert().multiply( worldQuat ) );
+
+							const parentWorldScale = new THREE.Vector3();
+							faceGrp.getWorldScale( parentWorldScale );
+							maskScene.scale.copy( worldScale.divide( parentWorldScale ) );
+
+							maskScene.updateMatrix();
+
+							// If attaching, store in accessories array; otherwise treat as the primary mask
+							if ( attach ) {
+								accessoryScenes.push( maskScene );
+								// update accessory UI
+								if ( typeof refreshAccessoryList === 'function' ) refreshAccessoryList();
+							} else {
+								maskSceneGlobal = maskScene;
+							}
+
+							if ( maskGltf.animations && maskGltf.animations.length > 0 ) {
+								if ( !mixer ) mixer = new THREE.AnimationMixer( mesh );
+								const maskActions = maskGltf.animations.map( ( clip ) => {
+									const action = mixer.clipAction( clip, maskScene );
+									action.clampWhenFinished = true;
+									action.setLoop( THREE.LoopOnce, 0 );
+									action.enabled = true;
+									action.setEffectiveWeight( 1 );
+									action._duration = clip.duration || 0;
+									return action;
+								} );
+								animActions = animActions.concat( maskActions );
+								console.log( 'Mask animations attached:', maskActions.length );
+							}
+
+							maskScene.position.set( maskParams.localX, maskParams.localY, maskParams.localZ );
+							if ( maskParams.rotationX || maskParams.rotationY || maskParams.rotationZ ) {
+								maskScene.rotation.set(
+									THREE.MathUtils.degToRad( maskParams.rotationX || 0 ),
+									THREE.MathUtils.degToRad( maskParams.rotationY || 0 ),
+									THREE.MathUtils.degToRad( maskParams.rotationZ || 0 )
+								);
+							}
+							if ( typeof maskParams.scaleMultiplier === 'number' && maskParams.scaleMultiplier !== 1 ) {
+								maskScene.scale.multiplyScalar( maskParams.scaleMultiplier );
+							}
+
+							maskScene.traverse( ( node ) => {
+								if ( node.isMesh ) {
+									node.renderOrder = 0;
+									if ( node.material ) {
+										const mats = Array.isArray( node.material ) ? node.material : [ node.material ];
+										for ( let i = 0; i < mats.length; i ++ ) {
+											let mat = mats[ i ];
+
+											if ( maskParams.useStandardMaterialFallback && ! ( mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial ) ) {
+												const fallback = new THREE.MeshStandardMaterial();
+												if ( mat.map ) fallback.map = mat.map;
+												if ( mat.color ) fallback.color = mat.color.clone();
+												mat = fallback;
+											}
+
+											if ( 'depthTest' in mat ) mat.depthTest = true;
+											if ( 'depthWrite' in mat ) mat.depthWrite = true;
+											if ( 'polygonOffset' in mat ) mat.polygonOffset = true;
+											if ( 'polygonOffsetFactor' in mat ) mat.polygonOffsetFactor = maskParams.polygonOffsetFactor;
+											if ( 'polygonOffsetUnits' in mat ) mat.polygonOffsetUnits = maskParams.polygonOffsetUnits;
+
+											if ( 'envMapIntensity' in mat ) mat.envMapIntensity = maskParams.envMapIntensity;
+											if ( 'metalness' in mat ) mat.metalness = maskParams.metalness;
+											if ( 'roughness' in mat ) mat.roughness = maskParams.roughness;
+											if ( 'emissive' in mat && maskParams.emissive ) {
+												mat.emissive = new THREE.Color( maskParams.emissive );
+												if ( 'emissiveIntensity' in mat ) mat.emissiveIntensity = maskParams.emissiveIntensity || 0;
+											}
+
+											mat.needsUpdate = true;
+											mats[ i ] = mat;
+										}
+										node.material = mats.length === 1 ? mats[ 0 ] : mats;
+									}
+								}
+							} );
+
+						}, undefined, ( err ) => console.warn( path + ' failed to load:', err ) );
+
+					};
+
+					// load default mask (works even if user hasn't picked a model yet)
+					if ( typeof loadMaskModel === 'function' ) loadMaskModel( 'mask1.glb', false );
+
+					// Hide loading screen
+					loadingScreen.classList.add( 'hidden' );
+					setTimeout( () => loadingScreen.remove(), 700 );
+
+					renderer.setAnimationLoop( animate );
+
+				} );
+
+			// Video Texture
+
+			const video = document.createElement( 'video' );
+
+			const texture = new THREE.VideoTexture( video );
+			texture.colorSpace = THREE.SRGBColorSpace;
+
+			const geometry = new THREE.PlaneGeometry( 1, 1 );
+			const material = new THREE.MeshBasicMaterial( { map: texture, depthWrite: false } );
+			const videomesh = new THREE.Mesh( geometry, material );
+			scene.add( videomesh );
+
+			// MediaPipe
+
+			const filesetResolver = await FilesetResolver.forVisionTasks(
+				'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
+			);
+
+			const faceLandmarker = await FaceLandmarker.createFromOptions( filesetResolver, {
+				baseOptions: {
+					modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+					delegate: 'GPU'
+				},
+				outputFaceBlendshapes: true,
+				outputFacialTransformationMatrixes: true,
+				// Also request landmark coordinates so we can compute a face centroid (nose-center)
+				outputFaceLandmarks: true,
+				runningMode: 'VIDEO',
+				numFaces: 1
+			} );
+
+			if ( navigator.mediaDevices && navigator.mediaDevices.getUserMedia ) {
+
+				navigator.mediaDevices.getUserMedia( { video: { facingMode: 'user' } } )
+					.then( function ( stream ) {
+
+						video.srcObject = stream;
+						video.play();
+
+						// Corner preview removed; only feed Three.js video texture from stream
+
+						// Update status pill
+						statusPill.classList.add( 'active' );
+						statusText.textContent = 'Camera Active';
+
+					} )
+					.catch( function ( error ) {
+
+						console.error( 'Unable to access the camera/webcam.', error );
+						statusText.textContent = 'Camera Error';
+
+					} );
+
+			}
+
+			const transform = new THREE.Object3D();
+
+			// Anchor for the mask model — updated each frame from MediaPipe transform
+			const maskAnchor = new THREE.Object3D();
+			maskAnchor.name = 'mask_anchor';
+			scene.add( maskAnchor );
+
+			// Smoothing and scale control for stable tracking
+			const _smoothedPos = new THREE.Vector3();
+			const _smoothedQuat = new THREE.Quaternion();
+			let _smoothedScale = 1.0;
+			// Use values from the early-declared `maskParams` so GUI access is safe
+			let SMOOTH_ALPHA = maskParams.smooth; // 0..1, higher = less smoothing (editable)
+			let FORWARD_OFFSET = maskParams.forward; // meters forward so mask sits off the face (editable)
+			const _tmpForward = new THREE.Vector3( 0, 0, 1 );
+
+			function animate() {
+
+				const delta = clock.getDelta();
+				if ( mixer ) mixer.update( delta );
+
+				if ( video.readyState >= HTMLMediaElement.HAVE_METADATA ) {
+
+					const results = faceLandmarker.detectForVideo( video, Date.now() );
+
+					// Face presence flag (badge handled by emotions module)
+					const faceFound = results.facialTransformationMatrixes.length > 0;
+
+					if ( results.facialTransformationMatrixes.length > 0 ) {
+
+						const facialTransformationMatrixes = results.facialTransformationMatrixes[ 0 ].data;
+
+						transform.matrix.fromArray( facialTransformationMatrixes );
+						transform.matrix.decompose( transform.position, transform.quaternion, transform.scale );
+
+						const object = scene.getObjectByName( 'grp_transform' );
+
+						// Update existing grp_transform if present (keeps original behavior)
+						if ( object ) {
+							object.position.x = transform.position.x;
+							object.position.y = transform.position.z + 40;
+							object.position.z = - transform.position.y;
+
+							object.rotation.x = transform.rotation.x;
+							object.rotation.y = transform.rotation.z;
+							object.rotation.z = - transform.rotation.y;
+						}
+
+						// Also update the dedicated mask anchor so the mask follows the face reliably.
+						// Use a more direct mapping and apply a small forward offset so the mask sits in front.
+						// Base anchor from the facial transformation matrix (keeps correct rotation)
+						const basePos = new THREE.Vector3( transform.position.x, transform.position.z, - transform.position.y );
+						basePos.multiplyScalar( 0.01 ); // scale down image-space units to scene units
+
+						// If landmark coordinates are available, compute centroid and bounding-box size
+						let centroid = null;
+						let faceSize = 0.12; // fallback
+						if ( results.faceLandmarks && results.faceLandmarks.length > 0 ) {
+							let lm = results.faceLandmarks[ 0 ];
+							const points = lm.landmarks || lm; // handle different output shapes
+							let sx = 0, sy = 0, sz = 0, nn = 0;
+							let minx = 1, miny = 1, maxx = 0, maxy = 0;
+							for ( const p of points ) {
+								if ( p && typeof p.x === 'number' ) {
+									sx += p.x; sy += p.y; sz += ( p.z || 0 ); nn ++;
+									minx = Math.min( minx, p.x );
+									miny = Math.min( miny, p.y );
+									maxx = Math.max( maxx, p.x );
+									maxy = Math.max( maxy, p.y );
+								}
+							}
+							if ( nn > 0 ) centroid = { x: sx / nn, y: sy / nn, z: sz / nn };
+							faceSize = Math.max( maxx - minx, maxy - miny );
+						}
+
+						// Use faceSize to compute a stronger centroid correction and derive target scale
+						if ( centroid ) {
+							const sizeFactor = THREE.MathUtils.clamp( faceSize * 2.5, 0.35, 2.5 );
+							basePos.x += ( centroid.x - 0.5 ) * sizeFactor * 0.14; // horizontal correction scaled by face size
+							basePos.y += ( 0.5 - centroid.y ) * sizeFactor * 0.14; // vertical correction
+							basePos.z += - ( centroid.z || 0 ) * sizeFactor * 0.06; // depth correction
+
+							// Choose target scale proportionally to faceSize (bigger on closer faces)
+							var targetScale = THREE.MathUtils.clamp( sizeFactor * 0.6, 0.35, 3.0 );
+						} else {
+							var targetScale = THREE.MathUtils.clamp( transform.scale.length() * 0.01, 0.35, 3.0 );
+						}
+
+						// Smooth position
+						_smoothedPos.lerp( basePos, SMOOTH_ALPHA );
+
+						// Smooth rotation (slerp)
+						_smoothedQuat.slerp( transform.quaternion, SMOOTH_ALPHA );
+
+						// Smooth scale
+						_smoothedScale = THREE.MathUtils.lerp( _smoothedScale, targetScale, SMOOTH_ALPHA );
+
+						// Apply a forward offset in the local forward direction so mask appears in front
+						const forward = _tmpForward.clone().applyQuaternion( _smoothedQuat ).multiplyScalar( FORWARD_OFFSET );
+
+						const finalPos = _smoothedPos.clone().add( forward );
+
+						maskAnchor.position.copy( finalPos );
+						maskAnchor.quaternion.copy( _smoothedQuat );
+						maskAnchor.scale.setScalar( _smoothedScale );
+
+					}
+
+					// Blendshapes and emotion updates moved to modules
+					const scores = updateBlendshapes( results );
+					updateEmotions( scores );
+
+				}
+
+				videomesh.scale.x = video.videoWidth / 100;
+				videomesh.scale.y = video.videoHeight / 100;
+
+				renderer.render( scene, camera );
+
+				controls.update();
+
+			}
+
+			window.addEventListener( 'resize', function () {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			} );
+
+		</script>
+	</body>
+</html>

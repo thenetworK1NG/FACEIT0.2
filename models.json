@@ -1,0 +1,11 @@
+{
+  "models": [
+    { "name": "Default mask", "file": "mask1.glb" },
+    { "name": "Normal", "file": "heads/normal.glb" },
+    { "name": "Normal Skull", "file": "heads/normalskull.glb" },
+    { "name": "Skull", "file": "heads/skull.glb" },
+    { "name": "Headphones", "file": "props/headphones.glb" },
+    { "name": "Steampunk", "file": "props/steampunk.glb" },
+    { "name": "Sunglasses", "file": "props/sunglasses.glb" }
+  ]
+}

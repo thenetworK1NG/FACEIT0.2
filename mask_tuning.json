@@ -1,0 +1,26 @@
+{
+  "smooth": 0.45,
+  "forward": 0.06,
+  "centroidMult": 0.14,
+  "sizeFactorMul": 2.5,
+  "scaleMin": 0.35,
+  "scaleMax": 3.0,
+  "localX": 0,
+  "localY": -0.02,
+  "localZ": 0.02,
+
+  "rotationX": 0,
+  "rotationY": 0,
+  "rotationZ": 0,
+  "scaleMultiplier": 1.0,
+
+  "emissive": "#000000",
+  "emissiveIntensity": 0.0,
+  "envMapIntensity": 0.7,
+  "metalness": 0.2,
+  "roughness": 0.8,
+
+  "polygonOffsetFactor": -1,
+  "polygonOffsetUnits": -4,
+  "useStandardMaterialFallback": false
+}
