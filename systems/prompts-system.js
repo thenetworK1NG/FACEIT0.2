@@ -96,8 +96,9 @@ export function initPromptsSystem({ getModelsData = () => [], getLoadMaskModel =
         sideContent.appendChild( list );
     }
 
-    btnPrompts.addEventListener( 'click', () => {
+    btnPrompts.addEventListener( 'click', async () => {
         if ( sideTitle ) sideTitle.textContent = 'Prompts';
+        await loadModelsData();
         populatePrompts();
         if ( sidePanel && sidePanel.classList ) sidePanel.classList.add( 'open' );
     } );

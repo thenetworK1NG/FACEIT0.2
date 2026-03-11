@@ -95,8 +95,9 @@ export function initHeadsSystem({ getModelsData = () => [], getLoadMaskModel = (
         sideContent.appendChild( list );
     }
 
-    btnHeads.addEventListener( 'click', () => {
+    btnHeads.addEventListener( 'click', async () => {
         if ( sideTitle ) sideTitle.textContent = 'Heads';
+        await loadModelsData();
         populateHeads();
         if ( sidePanel && sidePanel.classList ) sidePanel.classList.add( 'open' );
     } );
