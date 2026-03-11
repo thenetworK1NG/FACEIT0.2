@@ -617,8 +617,6 @@
 					loadingScreen.classList.add( 'hidden' );
 					setTimeout( () => loadingScreen.remove(), 700 );
 
-					renderer.setAnimationLoop( animate );
-
 				} );
 
 			// Video Texture
@@ -633,8 +631,32 @@
 			const videomesh = new THREE.Mesh( geometry, material );
 			scene.add( videomesh );
 
-			// MediaPipe
+			// Start camera EARLY so permission prompt appears quickly and with lower-res constraints
+			if ( navigator.mediaDevices && navigator.mediaDevices.getUserMedia ) {
+				const constraints = {
+					video: {
+						facingMode: 'user',
+						width: { ideal: 640 },
+						height: { ideal: 480 },
+						frameRate: { ideal: 15, max: 24 }
+					},
+					audio: false
+				};
 
+				try {
+					const stream = await navigator.mediaDevices.getUserMedia( constraints );
+					video.srcObject = stream;
+					await video.play();
+					// Update status pill
+					statusPill.classList.add( 'active' );
+					statusText.textContent = 'Camera Active';
+				} catch ( error ) {
+					console.error( 'Unable to access the camera/webcam.', error );
+					statusText.textContent = 'Camera Error';
+				}
+			}
+
+			// MediaPipe (loaded after camera start to avoid delaying permission prompt)
 			const filesetResolver = await FilesetResolver.forVisionTasks(
 				'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
 			);
@@ -652,30 +674,6 @@
 				numFaces: 1
 			} );
 
-			if ( navigator.mediaDevices && navigator.mediaDevices.getUserMedia ) {
-
-				navigator.mediaDevices.getUserMedia( { video: { facingMode: 'user' } } )
-					.then( function ( stream ) {
-
-						video.srcObject = stream;
-						video.play();
-
-						// Corner preview removed; only feed Three.js video texture from stream
-
-						// Update status pill
-						statusPill.classList.add( 'active' );
-						statusText.textContent = 'Camera Active';
-
-					} )
-					.catch( function ( error ) {
-
-						console.error( 'Unable to access the camera/webcam.', error );
-						statusText.textContent = 'Camera Error';
-
-					} );
-
-			}
-
 			const transform = new THREE.Object3D();
 
 			// Anchor for the mask model — updated each frame from MediaPipe transform
@@ -692,14 +690,20 @@
 			let FORWARD_OFFSET = maskParams.forward; // meters forward so mask sits off the face (editable)
 			const _tmpForward = new THREE.Vector3( 0, 0, 1 );
 
+			// Throttle detection to reduce CPU usage on mobile (~15 FPS)
+			const DETECT_FPS = 15;
+			const DETECT_INTERVAL = 1000 / DETECT_FPS;
+			let _lastDetectTime = 0;
+
 			function animate() {
 
 				const delta = clock.getDelta();
 				if ( mixer ) mixer.update( delta );
 
-				if ( video.readyState >= HTMLMediaElement.HAVE_METADATA ) {
-
-					const results = faceLandmarker.detectForVideo( video, Date.now() );
+				const now = performance.now();
+				if ( video.readyState >= HTMLMediaElement.HAVE_METADATA && ( now - _lastDetectTime ) >= DETECT_INTERVAL ) {
+					_lastDetectTime = now;
+					const results = faceLandmarker.detectForVideo( video, now );
 
 					// Face presence flag (badge handled by emotions module)
 					const faceFound = results.facialTransformationMatrixes.length > 0;
@@ -717,7 +721,7 @@
 						if ( object ) {
 							object.position.x = transform.position.x;
 							object.position.y = transform.position.z + 40;
-							object.position.z = - transform.position.y;
+							object.position.z = - transform.position.y;    
 
 							object.rotation.x = transform.rotation.x;
 							object.rotation.y = transform.rotation.z;
@@ -802,6 +806,9 @@
 				camera.updateProjectionMatrix();
 				renderer.setSize( window.innerWidth, window.innerHeight );
 			});
+
+			// Start the render loop after all variables (timers, detectors) initialized
+			renderer.setAnimationLoop( animate );
 
 		</script>
 	</body>

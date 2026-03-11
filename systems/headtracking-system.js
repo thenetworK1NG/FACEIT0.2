@@ -23,7 +23,8 @@ export async function initHeadtrackingSystem( opts = {} ) {
 
     // Renderer / scene / camera
     const renderer = new THREE.WebGLRenderer( { antialias: true } );
-    renderer.setPixelRatio( window.devicePixelRatio );
+    // Lower pixel ratio on mobile to reduce GPU load
+    renderer.setPixelRatio( Math.min( window.devicePixelRatio || 1, 1 ) );
     renderer.setSize( window.innerWidth, window.innerHeight );
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     document.body.appendChild( renderer.domElement );
@@ -90,10 +91,28 @@ export async function initHeadtrackingSystem( opts = {} ) {
     const videomesh = new THREE.Mesh( geometry, material );
     scene.add( videomesh );
 
-    // MediaPipe face landmarker
+    // Start camera stream EARLY to prompt permission quickly and reduce perceived delay
+    if ( navigator.mediaDevices && navigator.mediaDevices.getUserMedia ) {
+        try {
+            const constraints = {
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    frameRate: { ideal: 15, max: 24 }
+                },
+                audio: false
+            };
+            const stream = await navigator.mediaDevices.getUserMedia( constraints );
+            video.srcObject = stream;
+            await video.play();
+        } catch ( e ) { console.warn( 'getUserMedia failed', e ); }
+    }
+
+    // MediaPipe face landmarker (load after camera start so permission prompt isn't delayed)
     const filesetResolver = await FilesetResolver.forVisionTasks( { baseUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm' } );
     const faceLandmarker = await FaceLandmarker.createFromOptions( filesetResolver, {
-        baseOptions: { modelAssetPath: 'face_landmarker.task' },
+        baseOptions: { modelAssetPath: 'face_landmarker.task', delegate: 'GPU' },
         outputFaceBlendshapes: true,
         outputFaceGeometry: false,
         runningMode: 'VIDEO',
@@ -154,17 +173,12 @@ export async function initHeadtrackingSystem( opts = {} ) {
         }
     } );
 
-    // Start camera stream
-    if ( navigator.mediaDevices && navigator.mediaDevices.getUserMedia ) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia( { video: { facingMode: 'user' }, audio: false } );
-            video.srcObject = stream;
-            await video.play();
-        } catch ( e ) { console.warn( 'getUserMedia failed', e ); }
-    }
-
     // Simple animate loop: update faceLandmarker and render
     const clock = new THREE.Clock();
+    // Throttle detection to reduce CPU usage on mobile (e.g. ~15 FPS)
+    const DETECT_FPS = 15;
+    const DETECT_INTERVAL = 1000 / DETECT_FPS;
+    let _lastDetectTime = 0;
 
     async function animate() {
         requestAnimationFrame( animate );
@@ -172,10 +186,13 @@ export async function initHeadtrackingSystem( opts = {} ) {
 
         if ( mixer ) mixer.update( dt );
 
-        try {
-            const result = faceLandmarker.detectForVideo( video, performance.now() );
-            //
-        } catch ( e ) { }
+        const now = performance.now();
+        if ( video.readyState >= HTMLMediaElement.HAVE_METADATA && ( now - _lastDetectTime ) >= DETECT_INTERVAL ) {
+            _lastDetectTime = now;
+            try {
+                faceLandmarker.detectForVideo( video, now );
+            } catch ( e ) { /* swallow detection errors */ }
+        }
 
         renderer.render( scene, camera );
     }
