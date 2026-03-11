@@ -6,7 +6,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import vision from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0';
 const { FaceLandmarker, FilesetResolver } = vision;
 
-import { initBlendshapeSystem } from './blendshapes.js';
+//
 import { initEmotionSystem } from './emotions.js';
 
 export async function initHeadtrackingSystem( opts = {} ) {
@@ -140,13 +140,13 @@ export async function initHeadtrackingSystem( opts = {} ) {
     gltfLoader.load( 'https://threejs.org/examples/models/gltf/facecap.glb', ( gltf ) => {
         const mesh = gltf.scene.children[0];
         scene.add( mesh );
-        mesh.traverse( n => { if ( n.isMesh ) n.userData.isFacecap = true; } );
+        mesh.traverse( n => { if ( n.isMesh ) { n.userData.isFacecap = true; n.visible = false; } } );
         face = mesh.getObjectByName( 'mesh_2' );
         eyeL = mesh.getObjectByName( 'eyeLeft' );
         eyeR = mesh.getObjectByName( 'eyeRight' );
 
         // Initialize blendshape & emotion systems if requested
-        try { if ( face && typeof initBlendshapeSystem === 'function' ) initBlendshapeSystem( face, bsList ); } catch (e) { console.warn(e); }
+        //
         try { initEmotionSystem( { smileBadge, mouthBadge, angryBadge, surprisedBadge, neutralBadge, faceBadge } ); } catch (e) { console.warn(e); }
 
         if ( gltf.animations && gltf.animations.length ) {
@@ -174,11 +174,7 @@ export async function initHeadtrackingSystem( opts = {} ) {
 
         try {
             const result = faceLandmarker.detectForVideo( video, performance.now() );
-            if ( result && result.faceBlendshapes && result.faceBlendshapes.length ) {
-                if ( face ) {
-                    if ( typeof window.updateBlendshapes === 'function' ) window.updateBlendshapes( result );
-                }
-            }
+            //
         } catch ( e ) { }
 
         renderer.render( scene, camera );

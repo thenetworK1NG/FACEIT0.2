@@ -272,12 +272,6 @@
 			<!-- Compact menu buttons: open side-panel for Heads / Prompts (props) -->
 			<div id="model-picker" style="display:flex;align-items:center;gap:8px">
 				<button id="btn-heads" class="dl-btn" title="Open Heads menu">Heads</button>
-				<button id="btn-prompts" class="dl-btn" title="Open Prompts menu">Prompts</button>
-				<!-- Legacy selects and buttons for heads and props (hidden, but required for system population) -->
-				<select id="model-select" style="display:none"></select>
-				<button id="btn-load-model" style="display:none">Load Head</button>
-				<select id="props-select" style="display:none"></select>
-				<button id="btn-add-prop" style="display:none">Add Prop</button>
 			</div>
 			<div class="status-pill" id="status-pill">
 				<div class="status-dot"></div>
@@ -296,14 +290,14 @@
 				<button id="side-close" class="icon-btn" title="Close Menu" style="font-size:1.2em">&times;</button>
 			</div>
 			<div id="side-content"></div>
-	<script type="importmap">
-	{
-	  "imports": {
-	    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-	    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-	  }
-	}
-	</script>
+		<script type="importmap">
+		{
+			"imports": {
+				"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+			}
+		}
+		</script>
 
 	<script type="module" defer>
 	// --- Lazy load heavy modules only when needed (mobile optimization) ---
@@ -323,12 +317,8 @@
 				import('three/addons/exporters/GLTFExporter.js'),
 				import('three/addons/loaders/KTX2Loader.js'),
 				import('three/addons/libs/meshopt_decoder.module.js'),
-				import('three/addons/libs/lil-gui.module.min.js'),
 				import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0'),
 				import('./systems/heads-system.js'),
-				import('./systems/prompts-system.js'),
-				import('./systems/blendshapes.js'),
-				import('./systems/emotions.js')
 			]);
 			modulesLoaded = true;
 			return loadedModules;
@@ -337,14 +327,10 @@
 		// On mobile, load heavy modules only after user taps a menu button
 		if (isMob) {
 			const btnHeads = document.getElementById('btn-heads');
-			const btnPrompts = document.getElementById('btn-prompts');
 			const loadIfNeeded = async () => {
 				await loadHeavyModules();
-				// Optionally, you can trigger a UI update or initialization here if needed
 			};
 			if (btnHeads) btnHeads.addEventListener('click', loadIfNeeded, { once: true });
-			if (btnPrompts) btnPrompts.addEventListener('click', loadIfNeeded, { once: true });
-			// Optionally, load on first touch anywhere
 			document.body.addEventListener('touchstart', loadIfNeeded, { once: true });
 		} else {
 			// On desktop, load immediately
@@ -353,37 +339,24 @@
 	});
 	</script>
 			</div>
-			<div id="bs-panel">
-				<div class="panel-section-title" style="margin-top:12px">Live Blendshapes</div>
-				<div id="bs-list"></div>
-			</div>
+
 		</div>
 
 
 
 
 
-		<script type="importmap">
-			{
-				"imports": {
-					"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-				}
-			}
-		</script>
+
 
 		<script type="module">
 
 			import * as THREE from 'three';
 
-			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 			import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 			import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 			import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-
-			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 			// ── UI helpers ──────────────────────────────────────────────────
 			const loadingScreen = document.getElementById( 'loading-screen' );
@@ -391,27 +364,18 @@
 			const statusText    = document.getElementById( 'status-text' );
 			const faceBadge     = document.getElementById( 'face-badge' );
 			const sidePanel     = document.getElementById( 'side-panel' );
-			const bsList        = document.getElementById( 'bs-list' );
-			const smileBadge    = document.getElementById( 'smile-badge' );
-			const mouthBadge    = document.getElementById( 'mouth-badge' );
-			const angryBadge    = document.getElementById( 'angry-badge' );
-			const surprisedBadge= document.getElementById( 'surprised-badge' );
-			const neutralBadge  = document.getElementById( 'neutral-badge' );
+
+
 
 			// Model selector elements (populated from models.json)
-			const modelSelect = document.getElementById( 'model-select' );
-			const btnLoadModel = document.getElementById( 'btn-load-model' );
-			const propsSelect = document.getElementById( 'props-select' );
-			const btnAddProp = document.getElementById( 'btn-add-prop' );
+
 
 			// hook for dynamic mask loading (set later inside facecap load callback)
 			let loadMaskModel = null;
-			// hook for dynamic prop loading (mirrors mask loader but doesn't remove the head)
 
 
-			// Model loading and legacy select wiring handled inside systems/*.js
 
-			// Wire up Prop load button (props always attach and do not remove the head)
+
 
 
 			// Header button toggles
@@ -420,97 +384,23 @@
 				btnSide.addEventListener( 'click', () => sidePanel.classList.toggle( 'open' ) );
 			}
 
-			// New header menu buttons: Heads / Prompts (populated by small systems)
+
 			const btnHeads = document.getElementById( 'btn-heads' );
-			const btnPrompts = document.getElementById( 'btn-prompts' );
 			const sideContent = document.getElementById( 'side-content' );
 			const sideTitle = document.getElementById( 'side-title' );
 			const sideClose = document.getElementById( 'side-close' );
 
+
 			import { initHeadsSystem } from './systems/heads-system.js';
-			import { initPromptsSystem } from './systems/prompts-system.js';
 
-			// Initialize lightweight systems and give them accessors so they can
-			// call the runtime `loadMaskModel` when it becomes available.
+			// Initialize heads system and give it access to loadMaskModel
 			initHeadsSystem( { getLoadMaskModel: () => loadMaskModel, sidePanel } );
-			initPromptsSystem( { getLoadMaskModel: () => loadMaskModel, sidePanel } );
 
-			// Accessory list UI: shows attached props and provides hide/remove actions
-			const accessoryListEl = document.getElementById( 'accessory-list' );
 
-			function refreshAccessoryList() {
-				if ( !accessoryListEl ) return;
-				accessoryListEl.innerHTML = '';
-				if ( accessoryScenes.length === 0 ) {
-					const p = document.createElement( 'div' );
-					p.style.color = 'var(--text-dim)';
-					p.style.padding = '6px 4px';
-					p.textContent = 'No accessories attached.';
-					accessoryListEl.appendChild( p );
-					return;
-				}
-
-				for ( let i = 0; i < accessoryScenes.length; i ++ ) {
-					const a = accessoryScenes[ i ];
-					if ( !a ) continue;
-					const row = document.createElement( 'div' );
-					row.className = 'accessory-item';
-					const name = document.createElement( 'div' );
-					name.className = 'name';
-					name.textContent = a.name || ('accessory-' + i);
-
-					const toggle = document.createElement( 'button' );
-					toggle.className = 'act-btn';
-					toggle.textContent = a.visible ? 'Hide' : 'Show';
-					toggle.addEventListener( 'click', () => {
-						a.visible = !a.visible;
-						toggle.textContent = a.visible ? 'Hide' : 'Show';
-					} );
-
-					const remove = document.createElement( 'button' );
-					remove.className = 'act-btn';
-					remove.textContent = 'Remove';
-					remove.addEventListener( 'click', () => {
-						try {
-							if ( a.parent ) a.parent.remove( a );
-						} catch ( e ) { console.warn( 'Error removing accessory', e ); }
-						accessoryScenes.splice( i, 1 );
-						refreshAccessoryList();
-					} );
-
-					row.appendChild( name );
-					row.appendChild( toggle );
-					row.appendChild( remove );
-					accessoryListEl.appendChild( row );
-				}
-			}
-
-			// initial refresh in case accessories were added before UI ready
-			setTimeout( refreshAccessoryList, 300 );
 
 			// Camera visibility now only controls the Three.js video mesh (corner preview removed)
 
-			let guiVisible = true;
-			// `btn-gui` removed from DOM; if present, keep toggle behavior safe
-			const btnGui = document.getElementById( 'btn-gui' );
-			if ( btnGui ) {
-				btnGui.addEventListener( 'click', () => {
-					guiVisible = !guiVisible;
-					if ( !gui ) {
-						gui = new GUI();
-						if ( !gui.domElement.parentElement ) document.body.appendChild( gui.domElement );
-						gui.close();
-					}
-					if ( guiVisible ) {
-						if ( !gui.domElement.parentElement ) document.body.appendChild( gui.domElement );
-						gui.domElement.style.display = '';
-						gui.domElement.style.zIndex = 9999;
-						try { gui.open(); } catch ( e ) { }
-					} else {
-						gui.domElement.style.display = 'none';
-					}
-				} );
-			}
+
 
 			// Download the GLB model (re-exported clean, no meshopt — fully Blender-compatible)
 			let loadedScene = null;
@@ -521,9 +411,7 @@
 			let animPlaying = false;
 			const clock = new THREE.Clock();
 
-			// Blendshape system moved to external module (blendshapes.js)
 
-			let gui; // declared here so btn-gui toggle can reach it
 
 			// Mediapipe
 
@@ -531,14 +419,11 @@
 
 			const { FaceLandmarker, FilesetResolver } = vision;
 
-			// blendshapesMap moved to `blendshapes.js` to avoid duplication
 
 
 
-			//
 
-			import { initBlendshapeSystem, updateBlendshapes } from './systems/blendshapes.js';
-			import { initEmotionSystem, updateEmotions } from './systems/emotions.js';
+
 
 			// --- Optimize for mobile: lower pixel ratio ---
 			function isMobile() {
@@ -605,12 +490,10 @@
 
 			// Remove OrbitControls: no user camera controls on mobile or desktop
 
-			// Face
 
+			// Face
 			let face, eyeL, eyeR;
 			let maskSceneGlobal = null; // reference to the loaded mask scene for runtime tweaks
-			const accessoryScenes = []; // optional accessories attached on top of the main mask
-			const eyeRotationLimit = THREE.MathUtils.degToRad( 30 );
 
 			const ktx2Loader = new KTX2Loader()
 				.setTranscoderPath( 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/' )
@@ -655,9 +538,9 @@
 				loadedScene = gltf.scene; // store for clean re-export
 				const mesh = gltf.scene.children[ 0 ];
 				scene.add( mesh );
-				// mark all nodes in the loaded facecap so we can hide them independently later
+				// mark all nodes in the loaded facecap and hide mesh nodes
 				mesh.traverse( ( node ) => {
-						if ( node.isMesh ) node.userData.isFacecap = true;
+						if ( node.isMesh ) { node.userData.isFacecap = true; node.visible = false; }
 					} );
 
 					const head = mesh.getObjectByName( 'mesh_2' );
@@ -670,107 +553,12 @@
 					eyeL = mesh.getObjectByName( 'eyeLeft' );
   					eyeR = mesh.getObjectByName( 'eyeRight' );
 
-					// GUI
-					gui = new GUI();
-					gui.close();
 
-					// Lighting controls: exposed via the same GUI so you can tweak in real-time
-					if ( gui ) {
-						const lightFolder = gui.addFolder( 'Lighting' );
-						const lightState = {
-							preset: 'Studio',
-							ambient: ambientLight.intensity,
-							hemi: hemiLight.intensity,
-							dir: dirLight.intensity,
-							rim: rimLight.intensity,
-							env: true,
-							envIntensity: 1.0,
-							exposure: renderer.toneMappingExposure
-						};
 
-						lightFolder.add( lightState, 'preset', [ 'Studio', 'Rim', 'Dramatic', 'Flat', 'Neutral' ] ).name( 'Preset' ).onChange( applyLightingPreset );
 
-						lightFolder.add( lightState, 'ambient', 0, 5, 0.01 ).name( 'Ambient' ).onChange( v => ambientLight.intensity = v );
-						lightFolder.add( lightState, 'hemi', 0, 3, 0.01 ).name( 'Hemisphere' ).onChange( v => hemiLight.intensity = v );
-						lightFolder.add( lightState, 'dir', 0, 5, 0.01 ).name( 'Directional' ).onChange( v => dirLight.intensity = v );
-						lightFolder.add( lightState, 'rim', 0, 3, 0.01 ).name( 'Rim / Fill' ).onChange( v => rimLight.intensity = v );
 
-						lightFolder.addColor( { DirColor: '#ffffff' }, 'DirColor' ).name( 'Dir Color' ).onChange( v => dirLight.color.set( v ) );
-						lightFolder.addColor( { HemiSky: '#ffffff' }, 'HemiSky' ).name( 'Hemi Sky' ).onChange( v => hemiLight.color.set( v ) );
-						lightFolder.addColor( { HemiGround: '#444444' }, 'HemiGround' ).name( 'Hemi Ground' ).onChange( v => hemiLight.groundColor.set( v ) );
+					   //
 
-						lightFolder.add( lightState, 'env' ).name( 'Use Env Map' ).onChange( v => { scene.environment = v ? envMap : null; } );
-						lightFolder.add( lightState, 'envIntensity', 0, 2, 0.01 ).name( 'Env Intensity' ).onChange( v => {
-							// surface materials that use envMapIntensity will pick this up; for others, we can attempt a best-effort
-							scene.traverse( n => { if ( n.isMesh && n.material && 'envMapIntensity' in n.material ) n.material.envMapIntensity = v; } );
-						} );
-						lightFolder.add( lightState, 'exposure', 0.1, 2, 0.01 ).name( 'Exposure' ).onChange( v => renderer.toneMappingExposure = v );
-
-						function applyLightingPreset( name ) {
-							switch ( name ) {
-								case 'Studio':
-									ambientLight.intensity = 0.5;
-									hemiLight.intensity = 0.25;
-									dirLight.intensity = 1.2;
-									rimLight.intensity = 0.4;
-									renderer.toneMappingExposure = 1.0;
-									break;
-								case 'Rim':
-									ambientLight.intensity = 0.25;
-									hemiLight.intensity = 0.15;
-									dirLight.intensity = 0.6;
-									rimLight.intensity = 1.2;
-									renderer.toneMappingExposure = 1.0;
-									break;
-								case 'Dramatic':
-									ambientLight.intensity = 0.05;
-									hemiLight.intensity = 0.05;
-									dirLight.intensity = 2.2;
-									rimLight.intensity = 0.1;
-									renderer.toneMappingExposure = 0.9;
-									break;
-								case 'Flat':
-									ambientLight.intensity = 1.2;
-									hemiLight.intensity = 0.6;
-									dirLight.intensity = 0.2;
-									rimLight.intensity = 0.2;
-									renderer.toneMappingExposure = 1.2;
-									break;
-								case 'Neutral':
-									ambientLight.intensity = 0.35;
-									hemiLight.intensity = 0.25;
-									dirLight.intensity = 0.9;
-									rimLight.intensity = 0.4;
-									renderer.toneMappingExposure = 1.0;
-									break;
-							}
-						}
-
-						lightFolder.open();
-					}
-
-					const influences = head.morphTargetInfluences;
-
-					// Do not expose live morph-target sliders in the GUI to avoid showing raw facial data.
-					// The visual side-panel remains for UI purposes.
-
-					// Add runtime GUI controls for mask tuning
-					if ( gui ) {
-						// UI state for facecap visibility (default off)
-						const uiState = { showFacecap: false };
-						function setFacecapVisible( v ) {
-							mesh.traverse( ( n ) => {
-								if ( n.isMesh && n.userData.isFacecap ) n.visible = v;
-							} );
-						}
-						// add toggle at top of GUI
-						gui.add( uiState, 'showFacecap' ).name( 'Show facecap' ).onChange( ( v ) => setFacecapVisible( v ) );
-						setFacecapVisible( false );
-						// Mask tuning is now read from `mask_tuning.json` — UI sliders removed.
-					}
-					// Initialize external blendshape / emotion systems
-					initBlendshapeSystem( head, bsList );
-					initEmotionSystem( { smileBadge, mouthBadge, angryBadge, surprisedBadge, neutralBadge, faceBadge } );
 
 					// Setup animations (if the GLTF contained animation clips)
 					if ( gltf.animations && gltf.animations.length > 0 ) {
@@ -789,16 +577,14 @@
 						// Animation actions prepared above; UI trigger removed.
 					}
 
+
 					// Make mask loading dynamic: assign a loader function to `loadMaskModel`
-					loadMaskModel = function ( path, attach = false ) {
-						// If not attaching, remove the primary mask (leave accessories intact)
-						if ( !attach ) {
-							try {
-								if ( maskSceneGlobal && maskSceneGlobal.parent ) {
-									maskSceneGlobal.parent.remove( maskSceneGlobal );
-								}
-							} catch ( e ) { console.warn( 'Error removing previous mask', e ); }
-						}
+					loadMaskModel = function ( path ) {
+						try {
+							if ( maskSceneGlobal && maskSceneGlobal.parent ) {
+								maskSceneGlobal.parent.remove( maskSceneGlobal );
+							}
+						} catch ( e ) { console.warn( 'Error removing previous mask', e ); }
 
 						gltfLoader.load( path, ( maskGltf ) => {
 							const maskScene = maskGltf.scene;
@@ -807,67 +593,8 @@
 
 							const faceGrp = mesh.getObjectByName( 'grp_transform' ) || mesh;
 
-							maskScene.updateMatrixWorld( true );
-							const worldPos = new THREE.Vector3();
-							const worldQuat = new THREE.Quaternion();
-							const worldScale = new THREE.Vector3();
-							maskScene.getWorldPosition( worldPos );
-							maskScene.getWorldQuaternion( worldQuat );
-							maskScene.getWorldScale( worldScale );
-
 							faceGrp.add( maskScene );
-
-							// If attaching a prop and an accessory with the same filename already exists,
-							// remove the old one before adding the new one (prevents duplicates).
-							if ( attach ) {
-								const existingIndex = accessoryScenes.findIndex( a => a && a.name === maskScene.name );
-								if ( existingIndex !== -1 ) {
-									try {
-										const old = accessoryScenes[ existingIndex ];
-										if ( old && old.parent ) old.parent.remove( old );
-									} catch ( e ) { console.warn( 'Error removing existing accessory', e ); }
-									accessoryScenes.splice( existingIndex, 1 );
-									// update accessory UI
-									if ( typeof refreshAccessoryList === 'function' ) refreshAccessoryList();
-								}
-							}
-
-							faceGrp.worldToLocal( worldPos );
-							maskScene.position.copy( worldPos );
-
-							const parentWorldQuat = new THREE.Quaternion();
-							faceGrp.getWorldQuaternion( parentWorldQuat );
-							maskScene.quaternion.copy( parentWorldQuat.clone().invert().multiply( worldQuat ) );
-
-							const parentWorldScale = new THREE.Vector3();
-							faceGrp.getWorldScale( parentWorldScale );
-							maskScene.scale.copy( worldScale.divide( parentWorldScale ) );
-
-							maskScene.updateMatrix();
-
-							// If attaching, store in accessories array; otherwise treat as the primary mask
-							if ( attach ) {
-								accessoryScenes.push( maskScene );
-								// update accessory UI
-								if ( typeof refreshAccessoryList === 'function' ) refreshAccessoryList();
-							} else {
-								maskSceneGlobal = maskScene;
-							}
-
-							if ( maskGltf.animations && maskGltf.animations.length > 0 ) {
-								if ( !mixer ) mixer = new THREE.AnimationMixer( mesh );
-								const maskActions = maskGltf.animations.map( ( clip ) => {
-									const action = mixer.clipAction( clip, maskScene );
-									action.clampWhenFinished = true;
-									action.setLoop( THREE.LoopOnce, 0 );
-									action.enabled = true;
-									action.setEffectiveWeight( 1 );
-									action._duration = clip.duration || 0;
-									return action;
-								} );
-								animActions = animActions.concat( maskActions );
-								console.log( 'Mask animations attached:', maskActions.length );
-							}
+							maskSceneGlobal = maskScene;
 
 							maskScene.position.set( maskParams.localX, maskParams.localY, maskParams.localZ );
 							if ( maskParams.rotationX || maskParams.rotationY || maskParams.rotationZ ) {
@@ -880,46 +607,7 @@
 							if ( typeof maskParams.scaleMultiplier === 'number' && maskParams.scaleMultiplier !== 1 ) {
 								maskScene.scale.multiplyScalar( maskParams.scaleMultiplier );
 							}
-
-							maskScene.traverse( ( node ) => {
-								if ( node.isMesh ) {
-									node.renderOrder = 0;
-									if ( node.material ) {
-										const mats = Array.isArray( node.material ) ? node.material : [ node.material ];
-										for ( let i = 0; i < mats.length; i ++ ) {
-											let mat = mats[ i ];
-
-											if ( maskParams.useStandardMaterialFallback && ! ( mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial ) ) {
-												const fallback = new THREE.MeshStandardMaterial();
-												if ( mat.map ) fallback.map = mat.map;
-												if ( mat.color ) fallback.color = mat.color.clone();
-												mat = fallback;
-											}
-
-											if ( 'depthTest' in mat ) mat.depthTest = true;
-											if ( 'depthWrite' in mat ) mat.depthWrite = true;
-											if ( 'polygonOffset' in mat ) mat.polygonOffset = true;
-											if ( 'polygonOffsetFactor' in mat ) mat.polygonOffsetFactor = maskParams.polygonOffsetFactor;
-											if ( 'polygonOffsetUnits' in mat ) mat.polygonOffsetUnits = maskParams.polygonOffsetUnits;
-
-											if ( 'envMapIntensity' in mat ) mat.envMapIntensity = maskParams.envMapIntensity;
-											if ( 'metalness' in mat ) mat.metalness = maskParams.metalness;
-											if ( 'roughness' in mat ) mat.roughness = maskParams.roughness;
-											if ( 'emissive' in mat && maskParams.emissive ) {
-												mat.emissive = new THREE.Color( maskParams.emissive );
-												if ( 'emissiveIntensity' in mat ) mat.emissiveIntensity = maskParams.emissiveIntensity || 0;
-											}
-
-											mat.needsUpdate = true;
-											mats[ i ] = mat;
-										}
-										node.material = mats.length === 1 ? mats[ 0 ] : mats;
-									}
-								}
-							} );
-
 						}, undefined, ( err ) => console.warn( path + ' failed to load:', err ) );
-
 					};
 
 					// load default mask (works even if user hasn't picked a model yet)
@@ -1096,9 +784,7 @@
 
 					}
 
-					// Blendshapes and emotion updates moved to modules
-					const scores = updateBlendshapes( results );
-					updateEmotions( scores );
+					   //
 
 				}
 
