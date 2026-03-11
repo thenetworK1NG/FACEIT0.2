@@ -306,26 +306,50 @@
 	</script>
 
 	<script type="module" defer>
-	// Lazy load all heavy modules for mobile performance
+	// --- Lazy load heavy modules only when needed (mobile optimization) ---
 	window.addEventListener('DOMContentLoaded', async () => {
-	  // Only load Three.js and MediaPipe after DOM is ready
-	const [THREE, { GLTFLoader }, { GLTFExporter }, { KTX2Loader }, { MeshoptDecoder }, { GUI }, vision, { initHeadsSystem }, { initPromptsSystem }, { initBlendshapeSystem, updateBlendshapes }, { initEmotionSystem, updateEmotions }] = await Promise.all([
-		import('three'),
-		import('three/addons/loaders/GLTFLoader.js'),
-		import('three/addons/exporters/GLTFExporter.js'),
-		import('three/addons/loaders/KTX2Loader.js'),
-		import('three/addons/libs/meshopt_decoder.module.js'),
-		import('three/addons/libs/lil-gui.module.min.js'),
-		import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0'),
-		import('./systems/heads-system.js'),
-		import('./systems/prompts-system.js'),
-		import('./systems/blendshapes.js'),
-		import('./systems/emotions.js')
-	]);
+		function isMobile() {
+			return /Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+		}
+		const isMob = isMobile();
+		let modulesLoaded = false;
+		let loadedModules = null;
 
-	  // ...existing code...
-	  // (Paste the entire original <script type="module"> code here, but replace all top-level imports with the above destructured imports)
-	  // ...existing code...
+		async function loadHeavyModules() {
+			if (modulesLoaded) return loadedModules;
+			loadedModules = await Promise.all([
+				import('three'),
+				import('three/addons/loaders/GLTFLoader.js'),
+				import('three/addons/exporters/GLTFExporter.js'),
+				import('three/addons/loaders/KTX2Loader.js'),
+				import('three/addons/libs/meshopt_decoder.module.js'),
+				import('three/addons/libs/lil-gui.module.min.js'),
+				import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0'),
+				import('./systems/heads-system.js'),
+				import('./systems/prompts-system.js'),
+				import('./systems/blendshapes.js'),
+				import('./systems/emotions.js')
+			]);
+			modulesLoaded = true;
+			return loadedModules;
+		}
+
+		// On mobile, load heavy modules only after user taps a menu button
+		if (isMob) {
+			const btnHeads = document.getElementById('btn-heads');
+			const btnPrompts = document.getElementById('btn-prompts');
+			const loadIfNeeded = async () => {
+				await loadHeavyModules();
+				// Optionally, you can trigger a UI update or initialization here if needed
+			};
+			if (btnHeads) btnHeads.addEventListener('click', loadIfNeeded, { once: true });
+			if (btnPrompts) btnPrompts.addEventListener('click', loadIfNeeded, { once: true });
+			// Optionally, load on first touch anywhere
+			document.body.addEventListener('touchstart', loadIfNeeded, { once: true });
+		} else {
+			// On desktop, load immediately
+			await loadHeavyModules();
+		}
 	});
 	</script>
 			</div>
@@ -516,8 +540,17 @@
 			import { initBlendshapeSystem, updateBlendshapes } from './systems/blendshapes.js';
 			import { initEmotionSystem, updateEmotions } from './systems/emotions.js';
 
+			// --- Optimize for mobile: lower pixel ratio ---
+			function isMobile() {
+				return /Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+			}
+
 			const renderer = new THREE.WebGLRenderer( { antialias: true } );
-			renderer.setPixelRatio( window.devicePixelRatio );
+			if (isMobile()) {
+				renderer.setPixelRatio( Math.min(window.devicePixelRatio, 0.85) ); // Lower pixel ratio for mobile
+			} else {
+				renderer.setPixelRatio( window.devicePixelRatio );
+			}
 			renderer.setSize( window.innerWidth, window.innerHeight );
 			renderer.toneMapping = THREE.ACESFilmicToneMapping;
 			document.body.appendChild( renderer.domElement );
